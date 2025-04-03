@@ -5,6 +5,7 @@ import requests
 from io import BytesIO
 from huggingface_hub import login  # Import Hugging Face login
 import yaml
+import os
 
 # Hugging Face authentication
 def authenticate_huggingface_from_yaml(file_path: str):
@@ -33,10 +34,11 @@ def process_prompts(start_row, end_row, mode="img2img"):
         end_row (int): End row index in the CSV file.
         mode (str): Mode of generation, either "img2img" or "text2img".
     """
+    os.makedirs("output", exist_ok=True) # Ensure output directory exists
     # Load prompts and image URLs from CSV
-    data = pd.read_csv("../data/diffusion_prompts.csv")
+    data = pd.read_csv("../output/enhanced_prompts.csv")
     selected_data = data.iloc[start_row:end_row]  # Select specific rows
-
+    
     # Preload images for img2img mode
     images = {}
     if mode == "img2img":
@@ -66,7 +68,7 @@ def process_prompts(start_row, end_row, mode="img2img"):
             new_img = gen.generate(img, prompt=prompt)
 
             # Save the generated image
-            output_path = f"output_img2img_{index}.jpg"
+            output_path = f"output/output_img2img_{index}.jpg"
             new_img.save(output_path)
             print(f"Saved generated image to {output_path}")
 
@@ -76,7 +78,7 @@ def process_prompts(start_row, end_row, mode="img2img"):
             new_img = gen.generate(prompt=prompt)
 
             # Save the generated image
-            output_path = f"output_text2img_{index}.jpg"
+            output_path = f"output/output_text2img_{index}.jpg"
             new_img.save(output_path)
             print(f"Saved generated image to {output_path}")
 
@@ -84,12 +86,4 @@ def process_prompts(start_row, end_row, mode="img2img"):
             print(f"Invalid mode: {mode}. Please choose 'img2img' or 'text2img'.")
 
 # Example usage: process rows 0 to 5
-process_prompts(0, 2, mode="text2img")  # Change to `mode="text2img"` to test text-to-image generation
-
-# load img
-# img = Image.open("../data/EVA.jpg")
-
-# gen = ImageGenerator()
-# new_img = gen.generate(img, prompt="The huge robot is running",)
-
-# new_img.save("output.jpg")
+process_prompts(0, 1, mode="img2img")  # Change to `mode="text2img"` to test text-to-image generation
