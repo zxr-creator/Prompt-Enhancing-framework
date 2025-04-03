@@ -175,5 +175,4 @@ cython_debug/
 
 # Project
 # Datasets
-900k-diffusion-prompts-dataset
-qwen/assets/900k-diffusion-prompts-dataset
+datasets/900k-diffusion-prompts-dataset/*
