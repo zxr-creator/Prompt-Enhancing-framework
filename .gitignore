@@ -172,3 +172,7 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Project
+# Datasets
+datasets/900k-diffusion-prompts-dataset/*
