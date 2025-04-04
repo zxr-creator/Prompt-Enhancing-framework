@@ -176,3 +176,8 @@ cython_debug/
 # Project
 # Datasets
 datasets/900k-diffusion-prompts-dataset/*
+pipeline/output
+.DS_Store
+API_keys.yaml
+data/
+pipeline/.DS_Store
