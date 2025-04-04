@@ -1,5 +1,5 @@
 from diffusers import StableDiffusionImg2ImgPipeline
-from diffusers import StableDiffusion3Pipeline
+from diffusers import StableDiffusion3Pipeline, StableDiffusionPipeline
 import torch
 from PIL import Image
 import numpy as np
@@ -38,7 +38,7 @@ class ImageGenerator:
         return result.images[0]
 
 class TextToImageGenerator:
-    def __init__(self, model_name="stabilityai/stable-diffusion-3.5-medium", device="cpu"):
+    def __init__(self, model_name="stabilityai/stable-diffusion-2-1", device="mps"):
         """
         Initialize the TextToImageGenerator with the specified model and device.
         """
@@ -50,12 +50,19 @@ class TextToImageGenerator:
             else:
                 device = "cpu"
         self.device = device
-        self.pipe = StableDiffusion3Pipeline.from_pretrained(
-            model_name,
-            torch_dtype=torch.bfloat16 if device == "cuda" else torch.float32
-        ).to(device)
+        if "3" in model_name:
+            self.pipe = StableDiffusion3Pipeline.from_pretrained(
+                model_name,
+                torch_dtype=torch.bfloat16 if device == "cuda" else torch.float32
+            ).to(device)
+        else:
+            self.pipe = StableDiffusionPipeline.from_pretrained(
+                model_name,
+                torch_dtype=torch.float16 if device == "cuda" else torch.float32,
+                safety_checker=None
+            ).to(device)
 
-    def generate(self, prompt: str, num_inference_steps=40, guidance_scale=4.5):
+    def generate(self, prompt: str, num_inference_steps=50, guidance_scale=7.5):
         """
         Generate an image from a text prompt.
 
