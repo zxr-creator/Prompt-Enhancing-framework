@@ -131,4 +131,5 @@ def process_prompts(start_row, end_row, mode="img2img"):
             print(f"Invalid mode: {mode}. Please choose 'img2img' or 'text2img'.")
 
 # Example usage: process rows 0 to 5
+authenticate_huggingface_from_yaml("../API_keys.yaml")  # Authenticate with Hugging Face
 process_prompts(0, 100, mode="img2img")  # Change to `mode="text2img"` to test text-to-image generation
