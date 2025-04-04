@@ -33,7 +33,20 @@ Usage:
 6. Print results:
    print(f"FID: {fid:.4f}, IS: {is_score:.4f}, CLIP: {clip_score:.4f}")
 """
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import Dataset, DataLoader
 
+import numpy as np
+from PIL import Image
+from tqdm import tqdm
+from torchvision import transforms
+from torchvision.models import inception_v3
+
+from transformers import CLIPProcessor, CLIPModel
+
+from scipy.linalg import sqrtm
 class ImageQualityEvaluator:
     def __init__(self, device=None):
         # Device setup
@@ -63,12 +76,12 @@ class ImageQualityEvaluator:
     def _init_inception_models(self):
         """Initialize two Inception models for feature extraction (FID) and classification probabilities (IS)"""
         # Model for FID: outputs 2048-d features
-        self.inception_fid = inception_v3(pretrained=True, aux_logits=False)
+        self.inception_fid = inception_v3(pretrained=True, aux_logits=True)
         self.inception_fid.fc = nn.Identity()  # Remove the final fully connected layer
         self.inception_fid = self.inception_fid.to(self.device).eval()
         
         # Model for IS: outputs classification logits
-        self.inception_is = inception_v3(pretrained=True, aux_logits=False)
+        self.inception_is = inception_v3(pretrained=True, aux_logits=True)
         self.inception_is = self.inception_is.to(self.device).eval()
 
     def _load_images(self, image_list, transform):
