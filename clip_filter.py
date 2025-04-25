@@ -1,161 +1,211 @@
+"""Optimised CLIP train/test splitter — batch inference + disk‑backed images
+============================================================================
+
+*   **Thread‑safe**: CLIP model lives only in the main thread; worker threads
+    are strictly I/O‑bound.
+*   **Batch inference**: images & prompts are processed in configurable batches
+    on the GPU.
+*   **Disk‑backed images**: each image is saved to a temporary PNG on disk to
+    keep peak RAM usage minimal. After its batch is processed the file is
+    deleted immediately.  
+    (If you later want full in‑memory mode, swap `download_and_save()` to return
+    PIL images instead of paths.)
+
+Usage example
+-------------
+```bash
+python clip_filter_batch_io.py \
+    --input_csv data.csv \
+    --output_dir out \
+    --batch_size 128 \
+    --num_workers 32
+```
+"""
+
+from __future__ import annotations
+import argparse
 import os
-import csv
 import shutil
 import tempfile
-import requests
-from pathlib import Path
-from PIL import Image
-from io import BytesIO
-import pandas as pd
-import torch
-from transformers import CLIPProcessor, CLIPModel
-from sklearn.model_selection import train_test_split
-from torch.nn.functional import cosine_similarity
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
-import gc  # Add this to your imports
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import lru_cache
+from pathlib import Path
+from typing import Any, List, Tuple
+
+import pandas as pd
+import requests
+import torch
+from PIL import Image
+from torch.nn.functional import cosine_similarity
+from transformers import CLIPModel, CLIPProcessor
+
+# -----------------------------------------------------------------------------
+# Helper functions
+# -----------------------------------------------------------------------------
+
+def download_and_save(idx: int, row: pd.Series, tmp_dir: Path) -> Tuple[Path, str, dict[str, Any]] | None:  # noqa: E501
+    """Download image to `tmp_dir/idx.png`; return (path, prompt, row_dict) or None."""
+    url = row["url"]
+    img_path = tmp_dir / f"{idx}.png"
+    try:
+        resp = requests.get(url, timeout=5)
+        resp.raise_for_status()
+        img = Image.open(BytesIO(resp.content)).convert("RGB")
+        img.save(img_path)
+        return img_path, row["prompt"], row.to_dict()
+    except Exception:
+        # on failure ensure no half file remains
+        try:
+            img_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+        return None
+
+
+@lru_cache(maxsize=20_000)
+def truncate_prompt(prompt: str, tokenizer, eos_id: int) -> str:
+    ids = tokenizer(prompt)["input_ids"]
+    if len(ids) <= 77:
+        return prompt
+    ids = ids[:77]
+    if ids[-1] != eos_id:
+        ids[-1] = eos_id
+    return tokenizer.decode(ids, skip_special_tokens=True).strip()
+
+
+# -----------------------------------------------------------------------------
+# Core routine
+# -----------------------------------------------------------------------------
 
 def clip_filter(
     input_csv: str,
     output_dir: str = "output",
     train_ratio: float = 0.8,
-    clip_model: str = "openai/clip-vit-base-patch32",
+    clip_model_name: str = "openai/clip-vit-base-patch32",
     num_workers: int | None = None,
+    batch_size: int = 64,
 ):
-    """
-    Splits a dataset into train/test by CLIP similarity between image and prompt.
-    * Drops rows whose prompt token count > 77 (CLIP's max context length).
-    * Downloads images to a temporary folder (auto-cleaned), processes in parallel,
-      and outputs train/test CSVs with an added 'similarity' column.
-    * Logs progress every 1000 images.
-    """
-    # 1. Load data -------------------------------------------------------------
-    print(f"[INFO] Start loading data")
+    print("[INFO] Loading CSV …")
     df = pd.read_csv(input_csv)
 
-    # 2. Prepare CLIP ----------------------------------------------------------
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    processor = CLIPProcessor.from_pretrained(clip_model, use_fast=False)
-    model = CLIPModel.from_pretrained(clip_model).to(device).eval()
+    processor: CLIPProcessor = CLIPProcessor.from_pretrained(clip_model_name, use_fast=False)
+    model: CLIPModel = CLIPModel.from_pretrained(clip_model_name).to(device).eval()
     tokenizer = processor.tokenizer
+    eos_id = tokenizer.eos_token_id
 
-    # 3. Filter prompts longer than 77 tokens ---------------------------------
-    print(f"[INFO] Start filtering prompts longer than 77 tokens")
-    df["token_len"] = df["prompt"].astype(str).apply(
-        lambda p: len(tokenizer(p)["input_ids"])
-    )
-    orig_rows = len(df)
-    df = df[df["token_len"] <= 77].reset_index(drop=True).drop(columns="token_len")
-    skipped = orig_rows - len(df)
-    if skipped:
-        print(f"[INFO] Skipped {skipped} rows (prompt length > 77 tokens)")
+    print("[INFO] Truncating prompts >77 tokens …")
+    df["prompt"] = df["prompt"].astype(str).apply(lambda p: truncate_prompt(p, tokenizer, eos_id))
 
-    if df.empty:
-        print("[WARN] All rows were filtered out — nothing to process.")
-        return
+    # ── Temporary dir for images ────────────────────────────────────────────
+    tmp_dir = Path(tempfile.mkdtemp(prefix="clip_filter_"))
+    print(f"[INFO] Temp dir: {tmp_dir}")
 
-    # 4. Temp folder for images -----------------------------------------------
-    print(f"[INFO] Start filtering prompts longer than 77 tokens")
-    temp_dir = tempfile.mkdtemp(prefix="clip_filter_")
-
-    # 5. Progress tracking -----------------------------------------------------
-    processed_count = 0
-    count_lock = threading.Lock()
-
-    # 6. Helper to process one row --------------------------------------------
-    def process_row(idx, row):
-    nonlocal processed_count
-    url = row["url"]
-    try:
-        # Download image
-        resp = requests.get(url, timeout=5)
-        resp.raise_for_status()
-        img = Image.open(BytesIO(resp.content)).convert("RGB")
-        img_path = Path(temp_dir) / f"{idx}.png"
-        img.save(img_path)
-
-        # CLIP encode
-        inputs = processor(
-            text=row["prompt"], images=img, return_tensors="pt", padding=True
-        ).to(device)
-
-        with torch.no_grad():
-            img_emb = model.get_image_features(**inputs)
-            txt_emb = model.get_text_features(**inputs)
-            sim = cosine_similarity(img_emb, txt_emb).item()
-
-        # Clean up image file
-        img_path.unlink(missing_ok=True)
-
-        # Explicitly delete to reduce memory footprint
-        del img, inputs, img_emb, txt_emb
-        gc.collect()
-        torch.cuda.empty_cache()
-
-        # Thread-safe log
-        with count_lock:
-            processed_count += 1
-            if processed_count % 1000 == 0:
-                print(f"[INFO] Processed {processed_count} images")
-
-        return sim, row.to_dict()
-    except Exception:
-        return None
-
-    # 7. Parallel processing ---------------------------------------------------
-    print(f"[INFO] Start Parallel processing")
-    results = []
+    # Thread pool for downloads
     max_workers = num_workers or (os.cpu_count() or 4)
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {
-            executor.submit(process_row, idx, row): idx
-            for idx, row in df.iterrows()
-        }
-        for future in as_completed(futures):
-            res = future.result()
-            if res is not None:
-                results.append(res)
+    print(f"[INFO] Download threads: {max_workers}")
 
-    # 8. Cleanup temp folder ---------------------------------------------------
-    print(f"[INFO] Start Cleanup temp folder")
-    shutil.rmtree(temp_dir, ignore_errors=True)
+    processed = 0
+    processed_lock = threading.Lock()
+    results: List[Tuple[float, dict[str, Any]]] = []
 
-    # 9. Build DataFrame -------------------------------------------------------
-    print(f"[INFO] Start Building DataFrame")
+    def infer_batch(img_paths: List[Path], prompts: List[str]):
+        # open images lazily
+        imgs = [Image.open(p).convert("RGB") for p in img_paths]
+        with torch.no_grad():
+            img_inputs = processor(images=imgs, return_tensors="pt").to(device)
+            txt_inputs = processor(text=prompts, return_tensors="pt", padding=True).to(device)
+            img_emb = model.get_image_features(**img_inputs)
+            txt_emb = model.get_text_features(**txt_inputs)
+            sims = cosine_similarity(img_emb, txt_emb, dim=1).cpu()
+        # close & delete images to free RAM/disk
+        for p, im in zip(img_paths, imgs):
+            im.close()
+            try:
+                p.unlink()
+            except Exception:
+                pass
+        return sims
+
+    # batching queues
+    batch_paths: List[Path] = []
+    batch_prompts: List[str] = []
+    batch_rows: List[dict[str, Any]] = []
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(download_and_save, idx, row, tmp_dir): idx for idx, row in df.iterrows()}
+
+        for fut in as_completed(futures):
+            sample = fut.result()
+            if sample is None:
+                continue
+            path, prompt, row_dict = sample
+            batch_paths.append(path)
+            batch_prompts.append(prompt)
+            batch_rows.append(row_dict)
+
+            if len(batch_paths) >= batch_size:
+                sims = infer_batch(batch_paths, batch_prompts)
+                results.extend([(s.item(), r) for s, r in zip(sims, batch_rows)])
+                batch_paths.clear(); batch_prompts.clear(); batch_rows.clear()
+
+                with processed_lock:
+                    processed += batch_size
+                    if processed % 1000 == 0:
+                        print(f"[INFO] Processed {processed} samples …")
+
+    # flush remainder
+    if batch_paths:
+        sims = infer_batch(batch_paths, batch_prompts)
+        results.extend([(s.item(), r) for s, r in zip(sims, batch_rows)])
+
+    # clean temp dir
+    shutil.rmtree(tmp_dir, ignore_errors=True)
+
     if not results:
         print("[WARN] No valid images processed.")
         return
 
-    sims, rows = zip(*results)
-    result_df = pd.DataFrame(rows)
-    result_df["similarity"] = sims
+    sims_arr, rows_arr = zip(*results)
+    result_df = pd.DataFrame(rows_arr)
+    result_df["similarity"] = sims_arr
+    result_df = result_df.sort_values("similarity", ascending=False).reset_index(drop=True)
 
-    # 10. Sort and split -------------------------------------------------------
-    print(f"[INFO] Start sorting and spliting")
-    result_df = result_df.sort_values("similarity", ascending=False).reset_index(
-        drop=True
-    )
     split_idx = int(len(result_df) * train_ratio)
     train_df = result_df.iloc[:split_idx]
     test_df = result_df.iloc[split_idx:]
 
-    # 11. Write CSVs -----------------------------------------------------------
-    print(f"[INFO] Start writing CSVs")
-    for name, split_df in [("train", train_df), ("test", test_df)]:
+    for name, split_df in (("train", train_df), ("test", test_df)):
         folder = Path(output_dir) / name
         folder.mkdir(parents=True, exist_ok=True)
-        csv_path = folder / f"{name}.csv"
-        split_df.to_csv(csv_path, index=False)
+        split_df.to_csv(folder / f"{name}.csv", index=False)
 
-    print(
-        f"Train ({len(train_df)}) and Test ({len(test_df)}) CSVs written under '{output_dir}'."
+    print(f"[DONE] Train({len(train_df)}) & Test({len(test_df)}) written to '{output_dir}'")
+
+
+# -----------------------------------------------------------------------------
+# CLI entry
+# -----------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    import sys
+    from io import BytesIO
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input_csv", required=True)
+    parser.add_argument("--output_dir", default="output")
+    parser.add_argument("--train_ratio", type=float, default=0.8)
+    parser.add_argument("--clip_model", default="openai/clip-vit-base-patch32")
+    parser.add_argument("--num_workers", type=int)
+    parser.add_argument("--batch_size", type=int, default=64)
+    args = parser.parse_args()
+
+    clip_filter(
+        input_csv=args.input_csv,
+        output_dir=args.output_dir,
+        train_ratio=args.train_ratio,
+        clip_model_name=args.clip_model,
+        num_workers=args.num_workers,
+        batch_size=args.batch_size,
     )
-
-
-# Example call
-clip_filter(
-    "./datasets/900k-diffusion-prompts-dataset/diffusion_prompts.csv",
-    output_dir="./datasets/900k-diffusion-prompts-dataset/finetune",
-    train_ratio=0.8,
-    num_workers=64,
-)
