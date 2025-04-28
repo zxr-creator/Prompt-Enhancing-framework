@@ -179,5 +179,9 @@ datasets/900k-diffusion-prompts-dataset/*
 pipeline/output
 .DS_Store
 API_keys.yaml
-data/
 pipeline/.DS_Store
+checkpoint/checkpoint-479/
+output/checkpoint/
+output/checkpoint/
+output/checkpoint/
+output/checkpoint/

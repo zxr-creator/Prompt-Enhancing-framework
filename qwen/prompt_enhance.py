@@ -61,23 +61,14 @@ def inference(image_path, prompt, sys_prompt=sys_prompt, max_new_tokens=4096, re
     else:
         return output_text[0]
     
-    
-
-
-
 #  base 64 
 def encode_image(image_path):
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode("utf-8")
 
-
-
 model_path = "Qwen/Qwen2.5-VL-7B-Instruct"
 model = Qwen2_5_VLForConditionalGeneration.from_pretrained(model_path, torch_dtype=torch.bfloat16, attn_implementation="flash_attention_2",device_map="auto")
 processor = AutoProcessor.from_pretrained(model_path)
-
-
-
 
 # ====== CONFIGURATION ======
 INPUT_CSV_PATH = "../datasets/900k-diffusion-prompts-dataset/diffusion_prompts.csv"

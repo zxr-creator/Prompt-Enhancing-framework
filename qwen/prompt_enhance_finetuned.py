@@ -61,26 +61,19 @@ def inference(image_path, prompt, sys_prompt=sys_prompt, max_new_tokens=4096, re
     else:
         return output_text[0]
     
-    
-
-
-
 #  base 64 
 def encode_image(image_path):
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode("utf-8")
 
-checkpoint = "../output/checkpoint/finetune_checkpoint"
+checkpoint = "../output/checkpoint/checkpoint-479"
 
 model_path = "Qwen/Qwen2.5-VL-7B-Instruct"
 model = Qwen2_5_VLForConditionalGeneration.from_pretrained(checkpoint, torch_dtype=torch.bfloat16, attn_implementation="flash_attention_2",device_map="auto")
 processor = AutoProcessor.from_pretrained(checkpoint)
 
-
-
-
 # ====== CONFIGURATION ======
-INPUT_CSV_PATH = "../datasets/900k-diffusion-prompts-dataset/diffusion_prompts.csv"
+INPUT_CSV_PATH = "../datasets/900k-diffusion-prompts-dataset/finetune/test/test.csv"
 OUTPUT_CSV_PATH = "../output/enhanced_prompts_finetuned.csv"
 NUM_SAMPLES = 100  # <--- Change this number to control how many rows are processed
 IMAGE_SAVE_DIR = "../datasets/900k-diffusion-prompts-dataset/downloaded_images"
@@ -119,15 +112,8 @@ for idx, row in df_subset.iterrows():
         model_response = inference(image_path, prompt)
         print(f"model_response: {model_response}")
 
-        # Extract enhanced prompt
-        if isinstance(model_response, str) and "Enhanced Prompt:" in model_response:
-            enhanced_prompt = model_response.split("Enhanced Prompt:")[-1].strip().strip('"')
-        else:
-            print(f"Warning: No enhanced prompt in response for row {idx}")
-            continue  # skip this row
-
         # Save successful row and enhanced prompt
-        enhanced_prompts.append(enhanced_prompt)
+        enhanced_prompts.append(model_response)
         successful_rows.append(row)
 
     except Exception as e:
