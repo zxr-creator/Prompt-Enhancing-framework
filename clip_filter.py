@@ -26,7 +26,9 @@ import gc
 
 import pandas as pd
 import requests
+import requests
 import torch
+from PIL import Image
 from PIL import Image
 from torch.nn.functional import cosine_similarity
 from transformers import CLIPModel, CLIPProcessor
@@ -168,6 +170,7 @@ def clip_filter(
     output_dir: str = "output",
     train_ratio: float = 0.8,
     clip_model_name: str = "openai/clip-vit-base-patch32",
+    clip_model_name: str = "openai/clip-vit-base-patch32",
     num_workers: int | None = None,
     batch_size: int = 64,
     max_pending: int = 150,
@@ -294,6 +297,7 @@ def clip_filter(
     for name, split_df in (("train", train_df), ("test", test_df)):
         folder = output_path / name
         folder.mkdir(parents=True, exist_ok=True)
+        split_df.to_csv(folder / f"{name}.csv", index=False)
         split_df.to_csv(folder / f"{name}.csv", index=False)
 
     print(f"[DONE] Train({len(train_df)}) & Test({len(test_df)}) written to '{output_dir}'")
