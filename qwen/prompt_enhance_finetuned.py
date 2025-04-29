@@ -11,33 +11,45 @@ import os
 import torch
 from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
 
-sys_prompt = '''You are a prompt enhancer for image generation models like DALL·E or Midjourney.Given:An image.
+sys_prompt = '''You are a prompt enhancer for image generation models like DALL·E or Midjourney, fine-tuned specifically for prompt improvement tasks.
+
+Given:
+
+An image.
 
 The original text prompt used to generate the image.
 
-Your task is to analyze the image and the original prompt, and then output a more detailed, vivid, and compositionally rich enhanced prompt that would recreate the image with higher fidelity, aesthetic quality, and visual richness. The enhanced prompt should:
+Your task:
 
-Include specific objects, styles, settings, lighting, mood, and artistic techniques observed in the image.
+Carefully analyze both the image and the original prompt.
 
-Be clear, descriptive, and suitable for input into an AI image generator.
+Generate a more detailed, vivid, and compositionally rich enhanced prompt.
 
-Improve upon vague or minimal descriptions in the original prompt.
+Your enhanced prompt should:
 
-The Enhanced Prompt should be euqal to or less than 77 tokens. You should be aware of that 
+Clearly describe specific objects, artistic styles, settings, lighting, mood, and artistic techniques present in the image.
+
+Be clear, descriptive, and optimized for AI image generation.
+
+Expand upon vague or minimal descriptions from the original prompt.
+
+Maintain a total length equal to or fewer than 77 tokens.
+
+Always ensure your enhanced prompt accurately reflects details observed in both the provided image and original prompt.
 
 Input:
 
-Image: [insert image]
+Image: file://path/to/image
 
-Original Prompt: '[insert original prompt here]'
+Original Prompt: 'your original prompt'
 
 Output:
 
 Enhanced Prompt: '[Your improved prompt here]'
 '''
 
-# @title inference function
-def inference(image_path, prompt, sys_prompt=sys_prompt, max_new_tokens=4096, return_input=False):
+# Inference function
+def inference(image_path, prompt, sys_prompt=sys_prompt, max_new_tokens=77, return_input=False):
     image = Image.open(image_path)
     image_local_path = "file://" + image_path
     messages = [
@@ -49,7 +61,6 @@ def inference(image_path, prompt, sys_prompt=sys_prompt, max_new_tokens=4096, re
         },
     ]
     text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    # print("text:", text)
     inputs = processor(text=[text], images=[image], padding=True, return_tensors="pt")
     inputs = inputs.to('cuda')
 
@@ -60,22 +71,22 @@ def inference(image_path, prompt, sys_prompt=sys_prompt, max_new_tokens=4096, re
         return output_text[0], inputs
     else:
         return output_text[0]
-    
-#  base 64 
+
+# Base64 encode function
 def encode_image(image_path):
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode("utf-8")
 
-checkpoint = "../output/checkpoint/checkpoint-479"
-
+# Load model and processor
+checkpoint = "../output/checkpoint"
 model_path = "Qwen/Qwen2.5-VL-7B-Instruct"
-model = Qwen2_5_VLForConditionalGeneration.from_pretrained(checkpoint, torch_dtype=torch.bfloat16, attn_implementation="flash_attention_2",device_map="auto")
+model = Qwen2_5_VLForConditionalGeneration.from_pretrained(checkpoint, torch_dtype=torch.bfloat16, attn_implementation="flash_attention_2", device_map="auto")
 processor = AutoProcessor.from_pretrained(checkpoint)
 
 # ====== CONFIGURATION ======
 INPUT_CSV_PATH = "../datasets/900k-diffusion-prompts-dataset/finetune/test/test.csv"
-OUTPUT_CSV_PATH = "../output/enhanced_prompts_finetuned.csv"
-NUM_SAMPLES = 100  # <--- Change this number to control how many rows are processed
+OUTPUT_CSV_PATH = "../output/enhanced_prompts_finetuned3.csv"
+NUM_SAMPLES = 750  # <--- Change this number to control how many rows are processed
 IMAGE_SAVE_DIR = "../datasets/900k-diffusion-prompts-dataset/downloaded_images"
 
 # ====== Ensure image directory exists ======
@@ -111,9 +122,22 @@ for idx, row in df_subset.iterrows():
         # Run inference
         model_response = inference(image_path, prompt)
         print(f"model_response: {model_response}")
+        
+        # Extract enhanced prompt
+        if isinstance(model_response, str) and "Enhanced Prompt:" in model_response:
+            enhanced_prompt = model_response.split("Enhanced Prompt:")[-1].strip().strip('"')
+        else:
+            print(f"Warning: No enhanced prompt in response for row {idx}")
+            continue  # skip this row
+
+        # Check token count (filter out if < 25 tokens)
+        num_tokens = len(enhanced_prompt.split())
+        if num_tokens < 25:
+            print(f"Warning: Enhanced prompt too short ({num_tokens} tokens) for row {idx}. Skipping.")
+            continue  # skip this row
 
         # Save successful row and enhanced prompt
-        enhanced_prompts.append(model_response)
+        enhanced_prompts.append(enhanced_prompt)
         successful_rows.append(row)
 
     except Exception as e:
@@ -131,5 +155,5 @@ final_df.to_csv(OUTPUT_CSV_PATH, index=False)
 
 # ====== Summary ======
 print(f"Intended to process {NUM_SAMPLES} rows.")
-print(f"Successfully processed and saved {len(final_df)} rows.")
+print(f"Successfully processed and saved {len(final_df)} rows with at least 25 tokens.")
 print(f"Enhanced CSV saved to {OUTPUT_CSV_PATH}")

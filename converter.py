@@ -19,9 +19,9 @@ The Enhanced Prompt should be equal to or less than 77 tokens. You should be awa
 
 Input:
 
-Image: [insert image]
+Image: file://path/to/image
 
-Original Prompt: '[insert original prompt here]'
+Original Prompt: 'your original prompt'
 
 Output:
 
@@ -35,7 +35,7 @@ test_csv_path   = "./datasets/900k-diffusion-prompts-dataset/finetune/test/test.
 test_jsonl_path = "./datasets/900k-diffusion-prompts-dataset/finetune/test/qwen_test.jsonl"
 
 MAX_TOK = 77
-MIN_TOK = 35
+MIN_TOK = 55
 
 tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-VL-7B-Instruct", trust_remote_code=True)
 

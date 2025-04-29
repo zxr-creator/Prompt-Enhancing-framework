@@ -170,7 +170,6 @@ def clip_filter(
     output_dir: str = "output",
     train_ratio: float = 0.8,
     clip_model_name: str = "openai/clip-vit-base-patch32",
-    clip_model_name: str = "openai/clip-vit-base-patch32",
     num_workers: int | None = None,
     batch_size: int = 64,
     max_pending: int = 150,

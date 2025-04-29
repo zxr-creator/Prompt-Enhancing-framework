@@ -5,9 +5,9 @@ MASTER_ADDR=${MASTER_ADDR:-"127.0.0.1"}
 MASTER_PORT=${MASTER_PORT:-$(shuf -i 20001-29999 -n 1)}
 NNODES=${WORLD_SIZE:-1}
 NPROC_PER_NODE=8
-
+CACHE_DIR="./cache"  
 # DeepSpeed configuration
-deepspeed=./qwen-vl-finetune//scripts/zero3.json
+deepspeed=qwen-vl-finetune/scripts/zero3.json
 
 # Model configuration
 llm=Qwen/Qwen2.5-VL-7B-Instruct  # Using HuggingFace model ID
@@ -18,14 +18,14 @@ batch_size=4
 grad_accum_steps=4
 
 # Training entry point
-entry_file=./qwen-vl-finetune/qwenvl/train/train_qwen.py
+entry_file=qwen-vl-finetune/qwenvl/train/train_qwen.py
 
 # Dataset configuration (replace with public dataset names)
-datasets="diffusion_prompts_900k%20"
+datasets="diffusion_prompts_900k%25"
 
 # Output configuration
 run_name="qwen2vl-baseline"
-output_dir=./output
+output_dir=output/checkpoint
 
 # Training arguments
 args="
@@ -58,6 +58,7 @@ args="
     --gradient_checkpointing True \
     --dataloader_num_workers 4 \
     --run_name ${run_name} \
+    --cache_dir $CACHE_DIR \
     --report_to wandb"
 
 # Launch training

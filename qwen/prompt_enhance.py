@@ -27,9 +27,9 @@ The Enhanced Prompt should be euqal to or less than 77 tokens. You should be awa
 
 Input:
 
-Image: [insert image]
+Image: file://path/to/image
 
-Original Prompt: '[insert original prompt here]'
+Original Prompt: 'your original prompt'
 
 Output:
 
@@ -71,7 +71,7 @@ model = Qwen2_5_VLForConditionalGeneration.from_pretrained(model_path, torch_dty
 processor = AutoProcessor.from_pretrained(model_path)
 
 # ====== CONFIGURATION ======
-INPUT_CSV_PATH = "../datasets/900k-diffusion-prompts-dataset/diffusion_prompts.csv"
+INPUT_CSV_PATH = "../datasets/900k-diffusion-prompts-dataset/finetune/test/test.csv"
 OUTPUT_CSV_PATH = "../output/enhanced_prompts.csv"
 NUM_SAMPLES = 100  # <--- Change this number to control how many rows are processed
 IMAGE_SAVE_DIR = "../datasets/900k-diffusion-prompts-dataset/downloaded_images"

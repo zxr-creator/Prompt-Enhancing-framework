@@ -1,0 +1,147 @@
+{
+  "os": "Linux-6.8.0-1024-aws-x86_64-with-glibc2.35",
+  "python": "CPython 3.10.16",
+  "startedAt": "2025-04-28T20:16:50.237583Z",
+  "args": [
+    "--deepspeed",
+    "qwen-vl-finetune/scripts/zero3.json",
+    "--model_name_or_path",
+    "Qwen/Qwen2.5-VL-7B-Instruct",
+    "--dataset_use",
+    "diffusion_prompts_900k%20",
+    "--data_flatten",
+    "True",
+    "--tune_mm_vision",
+    "False",
+    "--tune_mm_mlp",
+    "True",
+    "--tune_mm_llm",
+    "True",
+    "--bf16",
+    "--output_dir",
+    "output/checkpoint1",
+    "--num_train_epochs",
+    "0.5",
+    "--per_device_train_batch_size",
+    "4",
+    "--per_device_eval_batch_size",
+    "8",
+    "--gradient_accumulation_steps",
+    "4",
+    "--max_pixels",
+    "50176",
+    "--min_pixels",
+    "784",
+    "--eval_strategy",
+    "no",
+    "--save_strategy",
+    "steps",
+    "--save_steps",
+    "1000",
+    "--save_total_limit",
+    "1",
+    "--learning_rate",
+    "2e-7",
+    "--weight_decay",
+    "0",
+    "--warmup_ratio",
+    "0.03",
+    "--max_grad_norm",
+    "1",
+    "--lr_scheduler_type",
+    "cosine",
+    "--logging_steps",
+    "1",
+    "--model_max_length",
+    "8192",
+    "--gradient_checkpointing",
+    "True",
+    "--dataloader_num_workers",
+    "4",
+    "--run_name",
+    "qwen2vl-baseline",
+    "--cache_dir",
+    "./cache",
+    "--report_to",
+    "wandb"
+  ],
+  "program": "/home/ubuntu/Xinrui/Prompt-Enhancing-framework/qwen-vl-finetune/qwenvl/train/train_qwen.py",
+  "codePath": "qwen-vl-finetune/qwenvl/train/train_qwen.py",
+  "git": {
+    "remote": "https://github.com/zxr-creator/Prompt-Enhancing-framework.git",
+    "commit": "e693d58dc82df1a349b95f599feefe806e7c2954"
+  },
+  "email": "xz118@rice.edu",
+  "root": "/home/ubuntu/Xinrui/Prompt-Enhancing-framework",
+  "host": "ip-172-31-29-177",
+  "executable": "/home/ubuntu/miniconda3/envs/qwen/bin/python",
+  "codePathLocal": "qwen-vl-finetune/qwenvl/train/train_qwen.py",
+  "cpu_count": 96,
+  "cpu_count_logical": 192,
+  "gpu": "NVIDIA L40S",
+  "gpu_count": 8,
+  "disk": {
+    "/": {
+      "total": "3121732386816",
+      "used": "205599510528"
+    }
+  },
+  "memory": {
+    "total": "1602031947776"
+  },
+  "cpu": {
+    "count": 96,
+    "countLogical": 192
+  },
+  "gpu_nvidia": [
+    {
+      "name": "NVIDIA L40S",
+      "memoryTotal": "48305799168",
+      "cudaCores": 18176,
+      "architecture": "Ada"
+    },
+    {
+      "name": "NVIDIA L40S",
+      "memoryTotal": "48305799168",
+      "cudaCores": 18176,
+      "architecture": "Ada"
+    },
+    {
+      "name": "NVIDIA L40S",
+      "memoryTotal": "48305799168",
+      "cudaCores": 18176,
+      "architecture": "Ada"
+    },
+    {
+      "name": "NVIDIA L40S",
+      "memoryTotal": "48305799168",
+      "cudaCores": 18176,
+      "architecture": "Ada"
+    },
+    {
+      "name": "NVIDIA L40S",
+      "memoryTotal": "48305799168",
+      "cudaCores": 18176,
+      "architecture": "Ada"
+    },
+    {
+      "name": "NVIDIA L40S",
+      "memoryTotal": "48305799168",
+      "cudaCores": 18176,
+      "architecture": "Ada"
+    },
+    {
+      "name": "NVIDIA L40S",
+      "memoryTotal": "48305799168",
+      "cudaCores": 18176,
+      "architecture": "Ada"
+    },
+    {
+      "name": "NVIDIA L40S",
+      "memoryTotal": "48305799168",
+      "cudaCores": 18176,
+      "architecture": "Ada"
+    }
+  ],
+  "cudaVersion": "12.8"
+}

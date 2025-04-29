@@ -168,7 +168,7 @@ def train(attn_implementation="flash_attention_2"):
 
     source_path = os.path.join(model_args.model_name_or_path, "chat_template.json")
     template_path = os.path.join(training_args.output_dir, "chat_template.json")
-    shutil.copy2(source_path, template_path)
+    # shutil.copy2(source_path, template_path)
 
     model.config.use_cache = True
 

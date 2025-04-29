@@ -22,8 +22,8 @@ VIDEOCHATGPT = {
 }
 
 DIFFUSION_PROMPTS_900K = {
-    "annotation_path": "./datasets/900k-diffusion-prompts-dataset/finetune/train/qwen_train.jsonl",
-    "data_path": "./datasets/900k-diffusion-prompts-dataset/finetune/train/images",
+    "annotation_path": "datasets/900k-diffusion-prompts-dataset/finetune/train/qwen_train.jsonl",
+    "data_path": "datasets/900k-diffusion-prompts-dataset/finetune/train/images",
 }
 
 data_dict = {
