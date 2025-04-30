@@ -22,9 +22,16 @@ python prompt_enhance_finetuned.py
 cd ..
 ```
 3. Evaluation 
+
+For Image Generation:
 ```
 cd ./pipeline
 python main.py
 cd ..
+python eval_result.py
+```
+
+For Score Evaluation (IS and CLIP Score)
+```
 python eval_result.py
 ```
