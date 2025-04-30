@@ -3,6 +3,7 @@ qwen-vl-utils==0.0.10
 transformers-stream-generator==0.0.4
 torch
 torchvision
+decord
 git+https://github.com/huggingface/transformers.git
 accelerate
 av
@@ -16,3 +17,4 @@ huggingface_hub
 flash-attn
 tqdm
 trl
+diffusers
