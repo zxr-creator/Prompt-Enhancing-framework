@@ -100,7 +100,9 @@ df_subset = df.head(NUM_SAMPLES)
 
 # ====== Store successful rows and enhanced prompts ======
 successful_rows = []
+original_prompts = []
 enhanced_prompts = []
+
 
 # ====== Process each row ======
 for idx, row in df_subset.iterrows():
@@ -137,6 +139,7 @@ for idx, row in df_subset.iterrows():
             continue  # skip this row
 
         # Save successful row and enhanced prompt
+        original_prompts.append(prompt)
         enhanced_prompts.append(enhanced_prompt)
         successful_rows.append(row)
 
@@ -146,7 +149,8 @@ for idx, row in df_subset.iterrows():
 
 # ====== Build final DataFrame and save ======
 final_df = pd.DataFrame(successful_rows)
-final_df['prompt'] = enhanced_prompts  # replace with enhanced prompts
+final_df['enhanced_prompt'] = enhanced_prompts
+
 
 # Ensure output directory exists
 os.makedirs(os.path.dirname(OUTPUT_CSV_PATH), exist_ok=True)
