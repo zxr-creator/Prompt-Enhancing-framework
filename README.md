@@ -19,10 +19,12 @@ python converter.py
 bash finetune.sh 
 cd qwen
 python prompt_enhance_finetuned.py
+cd ..
 ```
 3. Evaluation 
 ```
 cd ./pipeline
 python main.py
+cd ..
 python eval_result.py
 ```
