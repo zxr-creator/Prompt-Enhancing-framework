@@ -1,7 +1,6 @@
 import json
 import random
 from PIL import Image, ImageDraw, ImageFont
-from openai import OpenAI
 import base64
 import pandas as pd
 import requests
@@ -11,6 +10,7 @@ import os
 import torch
 from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
 
+# System prompt
 sys_prompt = '''You are a prompt enhancer for image generation models like DALL·E or Midjourney, fine-tuned specifically for prompt improvement tasks.
 
 Given:
@@ -72,92 +72,81 @@ def inference(image_path, prompt, sys_prompt=sys_prompt, max_new_tokens=77, retu
     else:
         return output_text[0]
 
-# Base64 encode function
-def encode_image(image_path):
-    with open(image_path, "rb") as image_file:
-        return base64.b64encode(image_file.read()).decode("utf-8")
-
 # Load model and processor
 checkpoint = "../output/checkpoint"
-model_path = "Qwen/Qwen2.5-VL-7B-Instruct"
-model = Qwen2_5_VLForConditionalGeneration.from_pretrained(checkpoint, torch_dtype=torch.bfloat16, attn_implementation="flash_attention_2", device_map="auto")
+model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+    checkpoint, torch_dtype=torch.bfloat16,
+    attn_implementation="flash_attention_2", device_map="auto"
+)
 processor = AutoProcessor.from_pretrained(checkpoint)
 
 # ====== CONFIGURATION ======
 INPUT_CSV_PATH = "../datasets/900k-diffusion-prompts-dataset/finetune/test/test.csv"
 OUTPUT_CSV_PATH = "../output/enhanced_prompts_finetuned3.csv"
-NUM_SAMPLES = 750  # <--- Change this number to control how many rows are processed
+NUM_SAMPLES = 750
 IMAGE_SAVE_DIR = "../datasets/900k-diffusion-prompts-dataset/downloaded_images"
 
-# ====== Ensure image directory exists ======
 os.makedirs(IMAGE_SAVE_DIR, exist_ok=True)
 
-# ====== Load the CSV ======
-df = pd.read_csv(INPUT_CSV_PATH)
+# Load and subset input CSV
+df = pd.read_csv(INPUT_CSV_PATH).head(NUM_SAMPLES)
 
-# ====== Slice for the desired number of rows ======
-df_subset = df.head(NUM_SAMPLES)
+# Store results
+records = []
 
-# ====== Store successful rows and enhanced prompts ======
-successful_rows = []
-original_prompts = []
-enhanced_prompts = []
-
-
-# ====== Process each row ======
-for idx, row in df_subset.iterrows():
-    prompt = row['prompt']
+for idx, row in df.iterrows():
     image_url = row['url']
-    image_id = row['id']
-    image_path = os.path.join(IMAGE_SAVE_DIR, f"{image_id}.png")
-    
+    image_path = os.path.join(IMAGE_SAVE_DIR, f"{idx}.png")
+    raw_prompt = row['prompt']
+    original_prompt = ' '.join(str(raw_prompt).split())  # flatten multi-line
+
     try:
-        # Check if image already exists, else download it
+        # Download image if needed
         if not os.path.exists(image_path):
             response = requests.get(image_url)
-            response.raise_for_status()  # ensure it's a valid response
+            response.raise_for_status()
             image = Image.open(BytesIO(response.content))
             image.save(image_path)
         else:
-            print(f"Image {image_id}.png already exists. Skipping download.")
+            print(f"Image {idx}.png already exists. Skipping download.")
 
         # Run inference
-        model_response = inference(image_path, prompt)
-        print(f"model_response: {model_response}")
-        
-        # Extract enhanced prompt
+        model_response = inference(image_path, original_prompt)
+        print(f"[{idx}] model_response: {model_response}")
+
+        # Extract prompt
         if isinstance(model_response, str) and "Enhanced Prompt:" in model_response:
             enhanced_prompt = model_response.split("Enhanced Prompt:")[-1].strip().strip('"')
         else:
-            print(f"Warning: No enhanced prompt in response for row {idx}")
-            continue  # skip this row
+            print(f"Warning: No enhanced prompt for row {idx}")
+            continue
 
-        # Check token count (filter out if < 25 tokens)
-        num_tokens = len(enhanced_prompt.split())
-        if num_tokens < 25:
-            print(f"Warning: Enhanced prompt too short ({num_tokens} tokens) for row {idx}. Skipping.")
-            continue  # skip this row
+        if len(enhanced_prompt.split()) < 25:
+            print(f"Warning: Too short ({len(enhanced_prompt.split())} tokens) for row {idx}")
+            continue
 
-        # Save successful row and enhanced prompt
-        original_prompts.append(prompt)
-        enhanced_prompts.append(enhanced_prompt)
-        successful_rows.append(row)
+        # Append to results
+        records.append({
+            "id": idx,
+            "url": row.get("url", ""),
+            "width": row.get("width", ""),
+            "height": row.get("height", ""),
+            "source_site": row.get("source_site", ""),
+            "similarity": row.get("similarity", ""),
+            "original_prompt": original_prompt,
+            "enhanced_prompt": enhanced_prompt
+        })
 
     except Exception as e:
         print(f"Error processing row {idx}: {e}")
-        continue  # skip this row
+        continue
 
-# ====== Build final DataFrame and save ======
-final_df = pd.DataFrame(successful_rows)
-final_df['enhanced_prompt'] = enhanced_prompts
-
-
-# Ensure output directory exists
+# Save final CSV
+final_df = pd.DataFrame(records)
 os.makedirs(os.path.dirname(OUTPUT_CSV_PATH), exist_ok=True)
-
 final_df.to_csv(OUTPUT_CSV_PATH, index=False)
 
-# ====== Summary ======
+# Summary
 print(f"Intended to process {NUM_SAMPLES} rows.")
 print(f"Successfully processed and saved {len(final_df)} rows with at least 25 tokens.")
-print(f"Enhanced CSV saved to {OUTPUT_CSV_PATH}")
+print(f"CSV saved to: {OUTPUT_CSV_PATH}")
